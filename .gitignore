@@ -1,2 +1,5 @@
 config/config.ini
 extensions/*.php
+*.swp
+*.old
+*.bak
