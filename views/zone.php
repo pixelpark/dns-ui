@@ -155,6 +155,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
 		$zone->update();
 		$primary_ns = $_POST['primary_ns'];
 		$contact = $_POST['contact'];
+		$serial = $_POST['serial'];
 		$refresh = DNSTime::expand($_POST['refresh']);
 		$retry = DNSTime::expand($_POST['retry']);
 		$expiry = DNSTime::expand($_POST['expiry']);
@@ -162,13 +163,14 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
 		$soa_ttl = DNSTime::expand($_POST['soa_ttl']);
 		if($zone->soa->primary_ns != $primary_ns
 		|| $zone->soa->contact != $contact
+		|| $zone->soa->serial != $serial
 		|| $zone->soa->refresh != $refresh
 		|| $zone->soa->retry != $retry
 		|| $zone->soa->expiry != $expiry
 		|| $zone->soa->default_ttl != $default_ttl
 		|| $zone->soa->ttl != $soa_ttl) {
 			$record = new StdClass;
-			$record->content = "$primary_ns $contact {$zone->soa->serial} $refresh $retry $expiry $default_ttl";
+			$record->content = "$primary_ns $contact $serial $refresh $retry $expiry $default_ttl";
 			$record->enabled = 'Yes';
 			$update = new StdClass;
 			$update->action = 'update';

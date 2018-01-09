@@ -167,6 +167,7 @@ global $output_formatter;
 								<option value="LOC" data-content-pattern="[0-9]{1,2} ([0-9]{1,3} ([0-9]{1,2}(\.[0-9]{1,3})?)?)? [NS] [0-9]{1,2} ([0-9]{1,3} ([0-9]{1,2}(\.[0-9]{1,3})?)?)? [EW] -?[0-9]+(\.[0-9]{1,2})?m?( [0-9]+(\.[0-9]{1,2})?m?( [0-9]+(\.[0-9]{1,2})?m?( [0-9]+(\.[0-9]{1,2})?m?)))">LOC</option>
 								<option value="MX" data-content-pattern="[0-9]+\s+\S+">MX</option>
 								<option value="PTR" data-content-pattern="\S+">PTR</option>
+								<option value="SPF" data-content-pattern=".*">SPF</option>
 								<option value="SRV" data-content-pattern="[0-9]+\s+[0-9]+\s+[0-9]+\s+\S+">SRV</option>
 								<option value="SSHFP" data-content-pattern="[0-4]\s+[0-2]\s+[0-9a-f]+">SSHFP</option>
 								<option value="TXT" data-content-pattern=".*">TXT</option>
@@ -197,7 +198,7 @@ global $output_formatter;
 				</ul>
 				<ul id="collisions_list">
 				</ul>
-				<input type="hidden" name="serial" value="<?php out($zone->soa->serial)?>">
+				<!-- input type="hidden" name="serial" value="<?php out($zone->soa->serial)?>" -->
 				<div class="form-group"><label for="comment">Update comment</label><input type="text" id="comment" name="comment" class="form-control"></div>
 				<div id="errors"></div>
 				<?php if($active_user->admin || $active_user->access_to($zone) == 'administrator') { ?>
@@ -421,7 +422,11 @@ global $output_formatter;
 			<div class="form-group">
 				<label class="col-sm-2 control-label">Serial number</label>
 				<div class="col-sm-10">
+					<?php if($active_user->admin) { ?>
+					<input type="text" class="form-control" id="serial" name="serial" required pattern="\S+" value="<?php out($zone->soa->serial)?>">
+					<?php } else { ?>
 					<p class="form-control-static"><?php out($zone->soa->serial)?></p>
+					<?php } ?>
 				</div>
 			</div>
 			<div class="form-group">
