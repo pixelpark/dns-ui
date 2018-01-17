@@ -198,7 +198,7 @@ global $output_formatter;
 				</ul>
 				<ul id="collisions_list">
 				</ul>
-				<!-- input type="hidden" name="serial" value="<?php out($zone->soa->serial)?>" -->
+				<input type="hidden" name="serial" value="<?php out($zone->soa->serial)?>">
 				<div class="form-group"><label for="comment">Update comment</label><input type="text" id="comment" name="comment" class="form-control"></div>
 				<div id="errors"></div>
 				<?php if($active_user->admin || $active_user->access_to($zone) == 'administrator') { ?>
@@ -422,11 +422,7 @@ global $output_formatter;
 			<div class="form-group">
 				<label class="col-sm-2 control-label">Serial number</label>
 				<div class="col-sm-10">
-					<?php if($active_user->admin) { ?>
-					<input type="text" class="form-control" id="serial" name="serial" required pattern="\S+" value="<?php out($zone->soa->serial)?>">
-					<?php } else { ?>
 					<p class="form-control-static"><?php out($zone->soa->serial)?></p>
-					<?php } ?>
 				</div>
 			</div>
 			<div class="form-group">
