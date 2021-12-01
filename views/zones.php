@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -15,16 +15,18 @@
 ## limitations under the License.
 ##
 
-$zones = $active_user->list_accessible_zones();
+$zones = $active_user->list_accessible_zones(array('pending_updates'));
 usort($zones, function($a, $b) {
-	$aname = implode(',', array_reverse(explode('.', $a->name)));
-	$bname = implode(',', array_reverse(explode('.', $b->name)));
+	$aname = implode(',', array_reverse(explode('.', punycode_to_utf8($a->name))));
+	$bname = implode(',', array_reverse(explode('.', punycode_to_utf8($b->name))));
 	return strnatcasecmp($aname, $bname);
 });
 
 $replication_types = $replication_type_dir->list_replication_types();
 $soa_templates = $template_dir->list_soa_templates();
 $ns_templates = $template_dir->list_ns_templates();
+$account_whitelist = !empty($config['dns']['classification_whitelist']) ? explode(',', $config['dns']['classification_whitelist']) : [];
+$force_account_whitelist = !empty($config['dns']['classification_whitelist']) ? 1 : 0;
 
 if($_SERVER['REQUEST_METHOD'] == 'POST') {
 	if(isset($_POST['add_zone']) && $active_user->admin) {
@@ -69,6 +71,8 @@ if(!isset($content)) {
 	$content->set('soa_templates', $soa_templates);
 	$content->set('ns_templates', $ns_templates);
 	$content->set('dnssec_enabled', isset($config['dns']['dnssec']) ? $config['dns']['dnssec'] : '0');
+	$content->set('account_whitelist', $account_whitelist);
+	$content->set('force_account_whitelist', $force_account_whitelist);
 }
 
 $page = new PageSection('base');

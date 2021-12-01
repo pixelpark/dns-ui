@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ $ns_templates = $this->get('ns_templates');
 $soa_templates = $this->get('soa_templates');
 ?>
 <h1>Settings</h1>
-<form method="post" action="/settings" class="form-horizontal">
+<form method="post" action="<?php outurl('/settings')?>" class="form-horizontal">
 	<fieldset>
 		<legend>Defaults (new zone)</legend>
 		<p class="alert alert-info">When creating a new zone, these settings will be used to pre-fill the form.</p>

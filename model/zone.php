@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -40,6 +40,14 @@ class Zone extends Record {
 	*/
 	private $nameservers = null;
 	/**
+	* Crypto keys for the zone as reported by PowerDNS
+	*/
+	private $cryptokeys = null;
+	/**
+	* Flag for API-RECTIFY being enabled
+	*/
+	private $api_rectify = null;
+	/**
 	* List of changes to be applied to the zone when doing ->commit_changes()
 	*/
 	private $changes = array();
@@ -51,7 +59,7 @@ class Zone extends Record {
 	}
 
 	/**
-	* Magic getter method - if superior field requested, return User object of user's superior.
+	* Magic getter method with special cases for soa and nameservers.
 	* @param string $field to retrieve
 	* @return mixed data stored in field
 	*/
@@ -63,6 +71,9 @@ class Zone extends Record {
 		case 'nameservers':
 			if(is_null($this->nameservers)) $this->list_resource_record_sets();
 			return $this->nameservers;
+		case 'api_rectify':
+			if(is_null($this->api_rectify)) $this->list_resource_record_sets();
+			return $this->api_rectify;
 		default:
 			return parent::__get($field);
 		}
@@ -77,6 +88,9 @@ class Zone extends Record {
 		switch($field) {
 		case 'nameservers':
 			$this->nameservers = $value;
+			break;
+		case 'api_rectify':
+			$this->api_rectify = $value;
 			break;
 		default:
 			parent::__set($field, $value);
@@ -190,6 +204,7 @@ class Zone extends Record {
 		$update->account = $this->account;
 		if(isset($config['dns']['dnssec']) && $config['dns']['dnssec'] == 1) {
 			$update->dnssec = (bool)$this->dnssec;
+			$update->api_rectify = (bool)$this->api_rectify;
 		}
 		$response = $this->powerdns->put('zones/'.urlencode($this->pdns_id), $update);
 		parent::update();
@@ -203,9 +218,15 @@ class Zone extends Record {
 	*/
 	public function &list_resource_record_sets() {
 		if(is_null($this->rrsets)) {
-			$data = $this->powerdns->get('zones/'.urlencode($this->pdns_id));
 			$this->rrsets = array();
 			$this->nameservers = array();
+			try {
+				$data = $this->powerdns->get('zones/'.urlencode($this->pdns_id));
+			} catch(Pest_InvalidRecord $e) { // before PowerDNS 4.2
+				throw new ZoneNotFoundInPowerDNS;
+			} catch(Pest_NotFound $e) { // 404 since PowerDNS 4.2
+			    throw new ZoneNotFoundInPowerDNS;;
+			}
 			$possible_bad_data = array();
 			usort($data->rrsets,
 				function($a, $b) {
@@ -276,8 +297,28 @@ class Zone extends Record {
 					error_log("Stray comment for $key in zone {$this->name}");
 				}
 			}
+			if(isset($data->api_rectify)) {
+				$this->api_rectify = $data->api_rectify;
+			}
 		}
 		return $this->rrsets;
+	}
+
+	/**
+	* Get all cryptokey metadata this zone.
+	* Fetch and parse the data from the PowerDNS API if we do not yet have it.
+	* @return StdClass containing all cryptokey metadata
+	*/
+	public function &get_cryptokeys() {
+		if(is_null($this->cryptokeys)) {
+			try {
+				$data = $this->powerdns->get('zones/'.urlencode($this->pdns_id).'/cryptokeys');
+			} catch(Pest_InvalidRecord $e) {
+				$data = array();
+			}
+		}
+		$this->cryptokeys = $data;
+		return $this->cryptokeys;
 	}
 
 	/**
@@ -310,7 +351,7 @@ class Zone extends Record {
 		while($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 			$row['author'] = $user_dir->get_user_by_id($row['author_id']);
 			$row['requester'] = (is_null($row['requester_id']) ? null : $user_dir->get_user_by_id($row['requester_id']));
-			$row['change_date'] = DateTime::createFromFormat('Y-m-d H:i:s.u', $row['change_date']);
+			$row['change_date'] = parse_postgres_date($row['change_date']);
 			$changesets[] = new ChangeSet($row['id'], $row);
 		}
 		return $changesets;
@@ -329,7 +370,7 @@ class Zone extends Record {
 		$stmt->execute();
 		if($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 			$row['author'] = $user_dir->get_user_by_id($row['author_id']);
-			$row['change_date'] = DateTime::createFromFormat('Y-m-d H:i:s.u', $row['change_date']);
+			$row['change_date'] = parse_postgres_date($row['change_date']);
 			return new ChangeSet($row['id'], $row);
 		}
 		throw new ChangeSetNotFound;
@@ -443,7 +484,7 @@ class Zone extends Record {
 		if($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 			$update = new PendingUpdate($row['id'], $row);
 			$update->author = new User($row['author_id']);
-			$update->request_date = DateTime::createFromFormat('Y-m-d H:i:s.u', $row['request_date']);
+			$update->request_date = parse_postgres_date($row['request_date']);
 			$update->raw_data = stream_get_contents($row['raw_data']);
 			return $update;
 		}
@@ -462,11 +503,152 @@ class Zone extends Record {
 		while($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 			$update = new PendingUpdate($row['id'], $row);
 			$update->author = new User($row['author_id']);
-			$update->request_date = DateTime::createFromFormat('Y-m-d H:i:s.u', $row['request_date']);
+			$update->request_date = parse_postgres_date($row['request_date']);
 			$update->raw_data = stream_get_contents($row['raw_data']);
 			$updates[] = $update;
 		}
 		return $updates;
+	}
+
+	/**
+	* Add a deletion request for this zone.
+	*/
+	public function add_delete_request() {
+		global $active_user;
+		$stmt = $this->database->prepare('INSERT INTO zone_delete (zone_id, requester_id, request_date) VALUES (?, ?, NOW())');
+		$stmt->bindParam(1, $this->id, PDO::PARAM_INT);
+		$stmt->bindParam(2, $active_user->id, PDO::PARAM_INT);
+		try {
+			$stmt->execute();
+		} catch(PDOException $e) {
+			if($e->getCode() == 23505) return;
+			throw $e;
+		}
+	}
+
+	/**
+	* Get the deletion request for this zone (if any).
+	*/
+	public function get_delete_request() {
+		$stmt = $this->database->prepare('SELECT * FROM zone_delete WHERE zone_id = ?');
+		$stmt->bindParam(1, $this->id, PDO::PARAM_INT);
+		$stmt->execute();
+		if($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+			$row['requester'] = new User($row['requester_id']);
+			$row['request_date'] = parse_postgres_date($row['request_date']);
+			if(!is_null($row['confirmer_id'])) {
+				$row['confirmer'] = new User($row['confirmer_id']);
+				$row['confirm_date'] = parse_postgres_date($row['confirm_date']);
+			}
+			return $row;
+		}
+		return null;
+	}
+
+	/**
+	* Cancel the deletion request for this zone.
+	*/
+	public function cancel_delete_request() {
+		$stmt = $this->database->prepare('DELETE FROM zone_delete WHERE zone_id = ? AND confirm_date IS NULL');
+		$stmt->bindParam(1, $this->id, PDO::PARAM_INT);
+		$stmt->execute();
+	}
+
+	/**
+	* Confirm the deletion request for this zone.
+	*/
+	public function confirm_delete_request() {
+		global $active_user, $zone_dir;
+		$stmt = $this->database->prepare('SELECT requester_id FROM zone_delete WHERE zone_id = ?');
+		$stmt->bindParam(1, $this->id, PDO::PARAM_INT);
+		$stmt->execute();
+		if($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+			if($row['requester_id'] != $active_user->id) {
+				$zone_export = $this->export_as_bind9_format();
+				$stmt = $this->database->prepare('UPDATE zone_delete SET confirmer_id = ?, confirm_date = NOW(), zone_export = ? WHERE zone_id = ?');
+				$stmt->bindParam(1, $active_user->id, PDO::PARAM_INT);
+				$stmt->bindParam(2, $zone_export, PDO::PARAM_LOB);
+				$stmt->bindParam(3, $this->id, PDO::PARAM_INT);
+				$stmt->execute();
+				if($stmt->rowCount() == 1) {
+					$this->powerdns->delete('zones/'.urlencode($this->pdns_id));
+					$zone_dir->git_tracked_delete($this, 'Zone '.$this->name.' deleted via DNS UI');
+				}
+			}
+		}
+	}
+
+	/**
+	* Remove the deletion record for this zone.
+	*/
+	public function remove_delete_record() {
+		$stmt = $this->database->prepare('DELETE FROM zone_delete WHERE zone_id = ? AND confirm_date IS NOT NULL');
+		$stmt->bindParam(1, $this->id, PDO::PARAM_INT);
+		$stmt->execute();
+	}
+
+	/**
+	* Restore a deleted zone.
+	*/
+	public function restore() {
+		global $zone_dir, $config;
+		$initial_limit = 10; // Max records to send in first request - workaround for https://github.com/PowerDNS/pdns/issues/6111
+		$batch_limit = 2500; // Max records to send in subsequent requests - avoid hitting limits in PowerDNS
+		$deletion = $this->get_delete_request();
+		$zonefile = new BindZonefile($deletion['zone_export']);
+		$rrsets = $zonefile->parse_into_rrsets($this, true);
+		$data = new StdClass;
+		$data->name = $this->name;
+		$data->kind = $this->kind;
+		$data->nameservers = array();
+		$data->rrsets = array();
+		foreach($rrsets as $rrset) {
+			$recordset = new StdClass;
+			$recordset->name = $rrset->name;
+			$recordset->type = $rrset->type;
+			$recordset->ttl = $rrset->ttl;
+			$recordset->records = array();
+			$recordset->comments = array();
+			foreach($rrset->list_resource_records() as $rr) {
+				$record = new StdClass;
+				$record->content = $rr->content;
+				$record->disabled = $rr->disabled;
+				$recordset->records[] = $record;
+			}
+			foreach($rrset->list_comments() as $c) {
+				$comment = new StdClass;
+				$comment->name = $c->name;
+				$comment->type = $c->type;
+				$comment->content = $c->content;
+				$comment->account = $c->account;
+				$comment->modified_at = $c->modified_at;
+				$recordset->comments[] = $comment;
+			}
+			$data->rrsets[] = $recordset;
+		}
+		$data->soa_edit_api = isset($config['powerdns']['soa_edit_api']) ? $config['powerdns']['soa_edit_api'] : 'INCEPTION-INCREMENT';
+		$data->account = $this->account;
+		$data->dnssec = (bool)$this->dnssec;
+		$remaining_rrsets = array_slice($data->rrsets, $initial_limit);
+		$data->rrsets = array_slice($data->rrsets, 0, $initial_limit);
+		$response = $this->powerdns->post('zones', $data);
+		$this->pdns_id = $response->id;
+		$this->serial = $response->serial;
+		while(count($remaining_rrsets) > 0) {
+			$patch = new StdClass;
+			$patch->rrsets = $remaining_rrsets;
+			$remaining_rrsets = array_slice($patch->rrsets, $batch_limit);
+			$patch->rrsets = array_slice($patch->rrsets, 0, $batch_limit);
+			foreach($patch->rrsets as $ref => $value) {
+				$patch->rrsets[$ref]->changetype = 'REPLACE';
+			}
+			$response = $this->powerdns->patch('zones/'.urlencode($this->pdns_id), $patch);
+		}
+		$this->send_notify();
+		$zone_dir->git_tracked_export(array($this), 'Zone '.$this->name.' restored via DNS UI');
+		$stmt = $this->database->prepare('DELETE FROM zone_delete WHERE zone_id = ? AND confirm_date IS NOT NULL');
+		$stmt->bindParam(1, $this->id, PDO::PARAM_INT);
+		$stmt->execute();
 	}
 
 	/**
@@ -485,6 +667,7 @@ class Zone extends Record {
 		$update = json_decode($update);
 		if(is_null($update)) throw new InvalidJSON(json_last_error_msg());
 		if(!isset($update->actions) && !is_array($update->actions)) throw new BadData('No actions provided.');
+		if(isset($config['web']['force_change_comment']) && intval($config['web']['force_change_comment']) == 1 && empty($update->comment)) throw new BadData('A change comment must be provided.');
 		foreach($update->actions as $action) {
 			try {
 				$changes[] = $this->process_rrset_action($action, $trash, $revs_missing, $revs_updated);
@@ -540,7 +723,7 @@ class Zone extends Record {
 	* @param array $revs_updated keep track of reverse zones that will be updated
 	*/
 	private function process_rrset_action($update, &$trash, &$revs_missing, &$revs_updated) {
-		global $active_user, $zone_dir;
+		global $active_user, $config, $zone_dir;
 		if(!is_object($update)) throw new BadData('Malformed update.');
 		if(!(isset($update->name) && isset($update->type))) throw new BadData('Malformed action.');
 		$change = new Change;
@@ -551,6 +734,13 @@ class Zone extends Record {
 			$update->oldtype = $update->type;
 		}
 		if(($update->type == 'SOA' || $update->type == 'NS') && !$active_user->admin) return;
+
+		if(isset($config['dns']['autocreate_reverse_records'])) {
+			$autocreate_ptr = (bool)$config['dns']['autocreate_reverse_records'];
+		} else {
+			$autocreate_ptr = true; # enabled by default
+		}
+
 		switch($update->action) {
 		case 'add':
 			if(!isset($update->records) || !is_array($update->records)) throw new BadData('Malformed action');
@@ -569,7 +759,11 @@ class Zone extends Record {
 				$rr = new ResourceRecord;
 				$rr->content = $record->content;
 				$rr->disabled = ($record->enabled === 'No' || $record->enabled === false);
-				$rr->{'set-ptr'} = $rr->disabled ? false : $zone_dir->check_reverse_record_zone($rrset->type, $rr->content, $revs_missing, $revs_updated);
+				if(!$autocreate_ptr || $rr->disabled) {
+					$rr->{'set-ptr'} = false;
+				} else {
+					$rr->{'set-ptr'} = $zone_dir->check_reverse_record_zone($rrset->name, $rrset->type, $rr->content, $revs_missing, $revs_updated);
+				}
 				$rrset->add_resource_record($rr);
 			}
 			if(isset($update->comment)) {
@@ -604,7 +798,11 @@ class Zone extends Record {
 				$rr = new ResourceRecord;
 				$rr->content = $record->content;
 				$rr->disabled = ($record->enabled === 'No' || $record->enabled === false);
-				$rr->{'set-ptr'} = $zone_dir->check_reverse_record_zone($rrset->type, $rr->content, $revs_missing, $revs_updated);
+				if(!$autocreate_ptr || $rr->disabled) {
+					$rr->{'set-ptr'} = false;
+				} else {
+					$rr->{'set-ptr'} = $zone_dir->check_reverse_record_zone($rrset->name, $rrset->type, $rr->content, $revs_missing, $revs_updated);
+				}
 				$rrset->add_resource_record($rr);
 			}
 			if(isset($update->comment) && $update->comment != $rrset->merge_comment_text()) {
@@ -648,10 +846,10 @@ class Zone extends Record {
 				$mail->subject = $revs_missing_count.' new DNS resource record'.($revs_missing_count == 1 ? '' : 's').' in '.DNSZoneName::unqualify(punycode_to_utf8($this->name)).' '.($revs_missing_count == 1 ? 'needs a reverse zone' : 'need reverse zones');
 				$mail->body = "The following records were added or updated in the ".DNSZoneName::unqualify(punycode_to_utf8($this->name))." zone:\n\n";
 				foreach($revs_missing['A'] as $rev_missing) {
-					$mail->body .= "    A: {$rev_missing}\n";
+					$mail->body .= "    A: {$rev_missing['address']} ({$rev_missing['name']})\n";
 				}
 				foreach($revs_missing['AAAA'] as $rev_missing) {
-					$mail->body .= " AAAA: {$rev_missing}\n";
+					$mail->body .= " AAAA: {$rev_missing['address']} ({$rev_missing['name']})\n";
 				}
 				$mail->body .= "\nBut no appropriate reverse zone could be found.\n";
 				if(count($revs_missing['A']) > 0) {
@@ -705,5 +903,6 @@ class SOA {
 	public $default_ttl;
 }
 
+class ZoneNotFoundInPowerDNS extends RuntimeException {}
 class ChangeSetNotFound extends RuntimeException {}
 class PendingUpdateNotFound extends RuntimeException {}

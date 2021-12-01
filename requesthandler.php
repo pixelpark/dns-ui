@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -27,11 +27,9 @@ if(isset($_SERVER['PHP_AUTH_USER'])) {
 }
 
 // Work out where we are on the server
-$base_path = dirname(__FILE__);
-$base_url = dirname($_SERVER['SCRIPT_NAME']);
 $request_url = preg_replace('|(.)/$|', '$1', $_SERVER['REQUEST_URI']);
-$relative_request_url = preg_replace('/^'.preg_quote($base_url, '/').'/', '/', $request_url);
-$absolute_request_url = 'http'.(isset($_SERVER['HTTPS']) ? 's' : '').'://'.$_SERVER['HTTP_HOST'].$request_url;
+$relative_request_url = preg_replace('/^'.preg_quote($relative_frontend_base_url, '/').'/', '', $request_url) ?: '/';
+$absolute_request_url = $frontend_root_url.$request_url;
 
 if(empty($config['web']['enabled'])) {
 	require('views/error503.php');

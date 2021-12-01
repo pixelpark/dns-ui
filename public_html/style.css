@@ -1,6 +1,6 @@
 /*
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -141,6 +141,11 @@ table.rrsets tr.rrset-delete td {
 table.rrsets tr.filtered {
 	display: none;
 }
+#reverse4 > table.zonelist td.name,
+#reverse6 > table.zonelist td.name,
+table.rrsets td.name {
+	font-family: monospace;
+}
 table.changepreview {
 	table-layout: fixed;
 }
@@ -165,6 +170,13 @@ table.changelog tbody tr.changeset {
 }
 table.changelog table td.content {
 	word-break: break-all;
+}
+
+#changelog-expand-all, #changelog-collapse-all {
+	float: right;
+}
+#changelog-collapse-all {
+	display: none;
 }
 
 input[type=text]:focus:invalid, input[type=email]:focus:invalid, select:focus:invalid, textarea:focus:invalid {
@@ -195,6 +207,9 @@ del {
 }
 td:hover .zone-hint {
 	color: #999;
+}
+pre.source {
+	max-height: 30em;
 }
 
 div.stickyHeader {

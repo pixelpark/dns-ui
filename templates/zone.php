@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ $pending = $this->get('pending');
 $changesets = $this->get('changesets');
 $access = $this->get('access');
 $accounts = $this->get('accounts');
+$cryptokeys = $this->get('cryptokeys');
 $allusers = $this->get('allusers');
 $replication_types = $this->get('replication_types');
 $local_zone = $this->get('local_zone');
@@ -28,6 +29,12 @@ $local_ipv4_ranges = $this->get('local_ipv4_ranges');
 $local_ipv6_ranges = $this->get('local_ipv6_ranges');
 $soa_templates = $this->get('soa_templates');
 $dnssec_enabled = $this->get('dnssec_enabled');
+$dnssec_edit = $this->get('dnssec_edit');
+$deletion = $this->get('deletion');
+$force_change_review = $this->get('force_change_review');
+$force_change_comment = $this->get('force_change_comment');
+$account_whitelist = $this->get('account_whitelist');
+$force_account_whitelist = $this->get('force_account_whitelist');
 $maxperpage = 1000;
 $reverse = false;
 global $output_formatter;
@@ -44,9 +51,12 @@ global $output_formatter;
 	<li role="presentation" class="active"><a href="#records" aria-controls="records" role="tab" data-toggle="tab">Resource records</a></li>
 	<li role="presentation"><a href="#pending" aria-controls="pending" role="tab" data-toggle="tab">Pending updates<?php if(count($pending) > 0) {?> <span class="badge"><?php out(count($pending))?></span><?php } ?></a></li>
 	<li role="presentation"><a href="#soa" aria-controls="soa" role="tab" data-toggle="tab">Zone configuration</a></li>
+	<?php if($dnssec_enabled) { ?>
+	<li role="presentation"><a href="#dnssec" aria-controls="dnssec" role="tab" data-toggle="tab">DNSSEC</a></li>
+	<?php } ?>
 	<li role="presentation"><a href="#import" aria-controls="import" role="tab" data-toggle="tab">Export / Import</a></li>
 	<?php if($active_user->admin) { ?>
-	<li role="presentation"><a href="#tools" aria-controls="tools" role="tab" data-toggle="tab">Tools</a></li>
+	<li role="presentation"><a href="#tools" aria-controls="tools" role="tab" data-toggle="tab">Tools<?php if(!is_null($deletion)) { ?> <span class="badge">!</span><?php } ?></a></li>
 	<?php } ?>
 	<li role="presentation"><a href="#changelog" aria-controls="changelog" role="tab" data-toggle="tab">Changelog</a></li>
 	<li role="presentation"><a href="#access" aria-controls="access" role="tab" data-toggle="tab">User access</a></li>
@@ -54,7 +64,7 @@ global $output_formatter;
 <div class="tab-content">
 	<div role="tabpanel" class="tab-pane active" id="records">
 		<h2 class="sr-only">Resource records</h2>
-		<form method="post" action="/zones/<?php out(DNSZoneName::unqualify($zone->name), ESC_URL)?>" class="zoneedit" data-zone="<?php out(punycode_to_utf8($zone->name))?>" data-local-zone="<?php out($local_zone ? 1 : 0)?>" data-local-ipv4-ranges="<?php out($local_ipv4_ranges)?>" data-local-ipv6-ranges="<?php out($local_ipv6_ranges)?>">
+		<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>" class="zoneedit" data-zone="<?php out($zone->name)?>" data-local-zone="<?php out($local_zone ? 1 : 0)?>" data-local-ipv4-ranges="<?php out($local_ipv4_ranges)?>" data-local-ipv6-ranges="<?php out($local_ipv6_ranges)?>">
 			<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
 			<nav></nav>
 			<table class="table table-bordered table-condensed table-hover stickyHeader rrsets">
@@ -151,6 +161,7 @@ global $output_formatter;
 								-->
 								<?php if($reverse) { ?>
 								<option value="CNAME" data-content-pattern="\S+">CNAME</option>
+								<option value="DS" data-content-pattern="[0-9]+\s+[0-9]+\s+[0-9]+\s+[a-zA-Z0-9]+">DS</option>
 								<?php if($active_user->admin) { ?>
 								<option value="NS" data-content-pattern="\S*">NS</option>
 								<?php } ?>
@@ -158,9 +169,15 @@ global $output_formatter;
 								<?php } else { ?>
 								<option value="A" data-content-pattern="((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])">A</option>
 								<option value="AAAA" data-content-pattern="(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))">AAAA</option>
+								<option value="ALIAS" data-content-pattern="\S+">ALIAS</option>
 								<option value="CAA" data-content-pattern="[0-9]+\s+\S+\s+\S+">CAA</option>
 								<option value="CNAME" data-content-pattern="\S+">CNAME</option>
-								<option value="NAPTR" data-content-pattern="[0-9]+\s+[0-9]+\s+&quot;[A-Z0-9]+&quot;\s+&quot;[\w+]+&quot;\s+&quot;[^&quot;]*&quot;\s+\S+">NAPTR</option>
+								<!-- DHCID regex contributed under CC BY-SA 4.0 by njzk2 (https://stackoverflow.com/users/671543/njzk2) on Stack Overflow: https://stackoverflow.com/a/5885097 -->
+								<option value="DHCID" data-content-pattern="^(?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{2}==|[A-Za-z0-9+\/]{3}=|[A-Za-z0-9+\/]{4})$">DHCID</option>
+								<option value="DNAME" data-content-pattern="\S+">DNAME</option>
+								<option value="DNSKEY" data-content-pattern="[0-9]+\s+[0-9]+\s+[0-9]+\s+.+">DNSKEY</option>
+								<option value="DS" data-content-pattern="[0-9]+\s+[0-9]+\s+[0-9]+\s+[a-zA-Z0-9]+">DS</option>
+								<option value="NAPTR" data-content-pattern="[0-9]+\s+[0-9]+\s+&quot;[a-zA-Z0-9]+&quot;\s*&quot;[^&quot;]*&quot;\s+&quot;[^&quot;]*&quot;\s+\S+">NAPTR</option>
 								<?php if($active_user->admin) { ?>
 								<option value="NS" data-content-pattern="\S*">NS</option>
 								<?php } ?>
@@ -170,6 +187,7 @@ global $output_formatter;
 								<option value="SPF" data-content-pattern=".*">SPF</option>
 								<option value="SRV" data-content-pattern="[0-9]+\s+[0-9]+\s+[0-9]+\s+\S+">SRV</option>
 								<option value="SSHFP" data-content-pattern="[0-4]\s+[0-2]\s+[0-9a-f]+">SSHFP</option>
+								<option value="TLSA" data-content-pattern="[0-9]+\s+[0-9]+\s+[0-9]+\s+[a-zA-Z0-9]+">TLSA</option>
 								<option value="TXT" data-content-pattern=".*">TXT</option>
 								<?php } ?>
 							</select>
@@ -190,7 +208,7 @@ global $output_formatter;
 			<nav></nav>
 			<input type="hidden" id="maxperpage" value="<?php out($maxperpage)?>">
 		</form>
-		<form method="post" action="/zones/<?php out(DNSZoneName::unqualify($zone->name), ESC_URL)?>">
+		<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>">
 			<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
 			<div id="updates" class="hide">
 				<h3>Updates</h3>
@@ -199,9 +217,9 @@ global $output_formatter;
 				<ul id="collisions_list">
 				</ul>
 				<input type="hidden" name="serial" value="<?php out($zone->soa->serial)?>">
-				<div class="form-group"><label for="comment">Update comment</label><input type="text" id="comment" name="comment" class="form-control"></div>
+				<div class="form-group"><label for="comment">Update comment</label><input type="text" id="comment" name="comment" class="form-control"<?php if($force_change_comment) out(' required');?>></div>
 				<div id="errors"></div>
-				<?php if($active_user->admin || $active_user->access_to($zone) == 'administrator') { ?>
+				<?php if(($active_user->admin || $active_user->access_to($zone) == 'administrator') && !$force_change_review) { ?>
 				<p><button type="submit" id="zonesubmit" name="update_rrs" value="save" class="btn btn-primary">Save changes</button></p>
 				<?php } else { ?>
 				<p><button type="submit" id="zonesubmit" name="update_rrs" value="request" class="btn btn-primary">Request changes</button></p>
@@ -234,7 +252,7 @@ global $output_formatter;
 			}
 		}
 		?>
-		<form method="post" action="/zones/<?php out(DNSZoneName::unqualify($zone->name), ESC_URL)?>" class="pending_update">
+		<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>" class="pending_update">
 			<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
 			<div class="panel panel-default">
 				<div class="panel-heading">
@@ -341,7 +359,7 @@ global $output_formatter;
 	</div>
 	<div role="tabpanel" class="tab-pane" id="soa">
 		<h2 class="sr-only">Zone configuration</h2>
-		<form method="post" action="/zones/<?php out(DNSZoneName::unqualify($zone->name), ESC_URL)?>" class="form-horizontal zoneeditsoa">
+		<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>" class="form-horizontal zoneeditsoa">
 			<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
 			<h3>Zone settings</h3>
 			<div class="form-group">
@@ -362,31 +380,28 @@ global $output_formatter;
 				<label for="classification" class="col-sm-2 control-label">Classification</label>
 				<div class="col-sm-10">
 					<?php if($active_user->admin) { ?>
+					<?php if($force_account_whitelist) { ?>
+					<select class="form-control" id="classification" name="classification">
+						<?php foreach($account_whitelist as $account) { ?>
+						<option value="<?php out($account)?>"<?php if($account == $zone->account) out(' selected', ESC_NONE)?>><?php out($account)?></option>
+						<?php } ?>
+						<?php if(!in_array($zone->account, $account_whitelist)) { ?>
+						<option value="<?php out($zone->account)?>" selected><?php out($zone->account)?></option>
+						<?php } ?>
+					</select>
+					<?php } else { ?>
 					<input type="text" class="form-control" id="classification" name="classification" list="account_list" required maxlength="40" value="<?php out($zone->account)?>">
 					<datalist id="account_list">
 						<?php foreach($accounts as $account) { ?>
 						<option value="<?php out($account)?>"><?php out($account)?></option>
 						<?php } ?>
 					</datalist>
+					<?PHP } ?>
 					<?php } else { ?>
 					<p class="form-control-static"><?php out($zone->account)?></p>
 					<?php } ?>
 				</div>
 			</div>
-			<?php if($dnssec_enabled) { ?>
-			<div class="form-group">
-				<label for="dnssec" class="col-sm-2 control-label">DNSSEC</label>
-				<div class="col-sm-10">
-					<?php if($active_user->admin) { ?>
-					<div class="checkbox">
-						<label><input type="checkbox" id="dnssec" name="dnssec" value="1"<?php if($zone->dnssec) out(' checked')?>> Enabled</label>
-					</div>
-					<?php } else { ?>
-					<p class="form-control-static"><?php out($zone->dnssec ? 'Enabled' : 'Disabled')?></p>
-					<?php } ?>
-				</div>
-			</div>
-			<?php } ?>
 			<h3>Start of authority (SOA)</h3>
 			<?php if($active_user->admin) { ?>
 			<div class="form-group">
@@ -395,7 +410,7 @@ global $output_formatter;
 					<?php foreach($soa_templates as $template) { ?>
 					<button type="button" class="btn btn-default soa-template" data-primary_ns="<?php out($template->primary_ns)?>" data-contact="<?php out($template->contact)?>" data-refresh="<?php out(DNSTime::abbreviate($template->refresh))?>" data-retry="<?php out(DNSTime::abbreviate($template->retry))?>" data-expire="<?php out(DNSTime::abbreviate($template->expire))?>" data-default_ttl="<?php out(DNSTime::abbreviate($template->default_ttl))?>" data-soa_ttl="<?php out(DNSTime::abbreviate($template->soa_ttl))?>"><?php out($template->name)?></button>
 					<?php } ?>
-					<a href="/templates/soa" class="btn btn-link">Edit templates</a>
+					<a href="<?php outurl('/templates/soa')?>" class="btn btn-link">Edit templates</a>
 				</div>
 			</div>
 			<?php } ?>
@@ -446,10 +461,10 @@ global $output_formatter;
 				</div>
 			</div>
 			<div class="form-group">
-				<label for="expiry" class="col-sm-2 control-label"><abbr title="Indicates when the zone data is no longer authoritative. Used by Slave (Secondary) servers only.">Expiry</abbr></label>
+				<label for="expire" class="col-sm-2 control-label"><abbr title="Indicates when the zone data is no longer authoritative. Used by Slave (Secondary) servers only.">Expire</abbr></label>
 				<div class="col-sm-10">
 					<?php if($active_user->admin) { ?>
-					<input type="text" class="form-control" id="expiry" name="expiry" required pattern="([0-9]+[smhdwSMHDW]?)+" maxlength="40" value="<?php out(DNSTime::abbreviate($zone->soa->expiry))?>">
+					<input type="text" class="form-control" id="expire" name="expire" required pattern="([0-9]+[smhdwSMHDW]?)+" maxlength="40" value="<?php out(DNSTime::abbreviate($zone->soa->expiry))?>">
 					<?php } else { ?>
 					<p class="form-control-static"><?php out(DNSTime::abbreviate($zone->soa->expiry))?></p>
 					<?php } ?>
@@ -475,7 +490,14 @@ global $output_formatter;
 					<?php } ?>
 				</div>
 			</div>
+			<hr>
 			<?php if($active_user->admin) { ?>
+			<div class="form-group">
+				<label for="soa_change_comment" class="col-sm-2 control-label">Change comment</label>
+				<div class="col-sm-10">
+					<input type="text" class="form-control" id="soa_change_comment" name="soa_change_comment" value=""<?php if($force_change_comment) out(' required');?>>
+				</div>
+			</div>
 			<div class="form-group">
 				<div class="col-sm-offset-2 col-sm-10">
 					<button type="submit" name="update_zone" value="1" class="btn btn-primary">Save changes</button>
@@ -484,12 +506,82 @@ global $output_formatter;
 			<?php } ?>
 		</form>
 	</div>
+	<?php if($dnssec_enabled) { ?>
+	<div role="tabpanel" class="tab-pane" id="dnssec">
+		<h2 class="sr-only">DNSSEC</h2>
+		<?php if($zone->dnssec) { ?>
+		<?php if(!$zone->api_rectify && $active_user->admin && $dnssec_edit) { ?>
+		<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>">
+			<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
+			<div class="alert alert-warning">
+				<p><strong>Warning:</strong> API-rectify is not enabled for this zone. It is recommended to enable it so that manual DNSSEC rectification is not needed.</p>
+				<p><button type="submit" class="btn btn-success" name="enable_api_rectify" value="1">Enable API-rectify</button></p>
+			</div>
+		</form>
+		<?php } ?>
+		<h3>Crypto keys</h3>
+		<?php foreach($cryptokeys as $cryptokey) { ?>
+		<?php
+		list($dnskey_flags, $dnskey_protocol, $dnskey_algorithm, $dnskey_keydata) = preg_split('/\s+/', $cryptokey->dnskey);
+		?>
+		<div class="panel <?php out($cryptokey->active ? 'panel-success' : 'panel-default') ?>">
+			<div class="panel-heading">
+				<h3 class="panel-title"><?php out($cryptokey->type.' #'.$cryptokey->id.': '.strtoupper($cryptokey->keytype))?></h3>
+			</div>
+			<div class="panel-body">
+				<dl>
+					<dt>Info</dt>
+					<dd><code>ID = <?php out($cryptokey->id)?> (<?php out(strtoupper($cryptokey->keytype))?>), flags = <?php out($cryptokey->flags)?>, tag = <?php out(DNSKEY::get_tag($dnskey_flags, $dnskey_protocol, $dnskey_algorithm, $dnskey_keydata))?>, algo = <?php out($dnskey_algorithm)?>, bits = <?php out($cryptokey->bits)?>  <?php out($cryptokey->active ? 'Active' : 'Inactive')?> ( <?php out($cryptokey->algorithm)?> )</code></dd>
+					<dt>DNSKEY</dt>
+					<dd><code><?php out($zone->name.' IN DNSKEY '.$cryptokey->dnskey.' ; ( '.$cryptokey->algorithm.' )')?></code></dd>
+					<?php if(isset($cryptokey->ds)) { ?>
+					<dt>DS records</dt>
+					<dd>
+						<ul>
+							<?php foreach($cryptokey->ds as $ds) { ?>
+							<li><code><?php out($zone->name.' IN DS '.$ds.' ; ( '.DS::get_digest_type($ds).' )') ?></code></li>
+							<?php } ?>
+						</ul>
+					</dd>
+					<?php } ?>
+				</dl>
+			</div>
+		</div>
+		<?php } ?>
+		<?php } else { ?>
+		<p>DNSSEC is not currently enabled for this zone.</p>
+		<?php } ?>
+		<?php if($active_user->admin && $dnssec_edit) { ?>
+		<?php if($zone->dnssec) { ?>
+		<h3>Disable DNSSEC</h3>
+		<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>" class="disablednssec">
+			<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
+			<p>
+				<p class="alert alert-danger">
+					<strong>Warning!</strong> Disabling DNSSEC for the zone will permanently delete the zone's DNSSEC private keys in PowerDNS.
+				</p>
+				<div class="checkbox"><label><input type="checkbox" name="disable_dnssec" value="1"> Confirm DNSSEC disable</label></div>
+				<button type="submit" class="btn btn-danger">Disable DNSSEC for <?php out(DNSZoneName::unqualify($zone->name))?><span>…</span></button>
+			</p>
+		</form>
+		<?php } else { ?>
+		<h3>Enable DNSSEC</h3>
+		<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>">
+			<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
+			<p>
+				<button type="submit" name="enable_dnssec" value="1" class="btn btn-primary">Enable DNSSEC for <?php out(DNSZoneName::unqualify($zone->name))?></button>
+			</p>
+		</form>
+		<?php } ?>
+		<?php } ?>
+	</div>
+	<?php } ?>
 	<div role="tabpanel" class="tab-pane" id="import">
 		<h2 class="sr-only">Export / Import</h2>
 		<h3>Export zone</h3>
-		<a href="/zones/<?php out(DNSZoneName::unqualify($zone->name), ESC_URL)?>/export" class="btn btn-primary">Export zone in bind9 format</a>
+		<a href="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>/export" class="btn btn-primary">Export zone in bind9 format</a>
 		<h3>Import zone</h3>
-		<form method="post" action="/zones/<?php out(DNSZoneName::unqualify($zone->name), ESC_URL)?>/import" enctype="multipart/form-data">
+		<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)).'/import')?>" enctype="multipart/form-data">
 			<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
 			<div class="form-group">
 				<label>bind9 zone file</label>
@@ -517,7 +609,7 @@ global $output_formatter;
 		<h2 class="sr-only">Tools</h2>
 		<h3>Split zone</h3>
 		<p>This tool allows you to split records off into a separate new zone.</p>
-		<form method="post" action="/zones/<?php out(DNSZoneName::unqualify($zone->name), ESC_URL)?>/split" class="form-inline">
+		<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)).'/split')?>" class="form-inline">
 			<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
 			<label for="zone_split_prefix" class="sr-only">Suffix</label>
 			<div class="input-group">
@@ -527,10 +619,55 @@ global $output_formatter;
 			</div>
 			<button type="submit" class="btn btn-primary">Split matching records into new zone…</button>
 		</form>
+		<h3>Delete zone</h3>
+		<?php if(is_null($deletion)) { ?>
+		<p>Permanently delete a zone from the DNS server and archive it. Zone deletion requires confirmation from another user.</p>
+		<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>" class="zonedelete form-inline">
+			<p>
+				<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
+				<div class="checkbox"><label><input type="checkbox" name="request_delete_zone" value="1"> Confirm zone deletion request</label></div>
+				<button type="submit" class="btn btn-danger">Request zone deletion<span>…</span></button>
+			</p>
+		</form>
+		<?php } elseif(is_null($deletion['confirm_date'])) { ?>
+		<div class="panel panel-primary">
+			<div class="panel-heading">
+				<h4 class="panel-title">Deletion request pending</h4>
+			</div>
+			<div class="panel-body">
+				<p><a href="<?php outurl('/users/'.urlencode($deletion['requester']->uid))?>"><?php out($deletion['requester']->name)?></a> has requested that this zone be deleted from the DNS server. This request must be confirmed by another administrator.</p>
+				<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>" class="zonedelete form-inline">
+					<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
+					<button type="submit" class="btn btn-default" name="cancel_delete_zone" value="1">Abort request</button>
+					<?php if($deletion['requester']->id != $active_user->id) { ?>
+					<div class="checkbox"><label><input type="checkbox" name="confirm_delete_zone" value="1"> Confirm zone deletion</label></div>
+					<button type="submit" class="btn btn-danger">Delete zone<span>…</span></button>
+					<?php } ?>
+				</form>
+			</div>
+		</div>
+		<?php } else { ?>
+		<div class="alert alert-warning">
+			<p>This zone was previously deleted on <?php out($deletion['confirm_date']->format('Y-m-d H:i:s'))?> by <a href="<?php outurl('/users/'.urlencode($deletion['requester']->uid))?>"><?php out($deletion['requester']->name)?></a> and <a href="<?php outurl('/users/'.urlencode($deletion['confirmer']->uid))?>"><?php out($deletion['confirmer']->name)?></a>.</p>
+			<p>This is a snapshot of the zone's contents prior to its deletion.</p>
+			<pre class="source"><?php out($deletion['zone_export'])?></pre>
+			<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>" class="zonedelete form-inline">
+				<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
+				<button type="submit" class="btn btn-default" name="remove_delete_record" value="1">Remove snapshot</button>
+			</form>
+		</div>
+		<?php } ?>
+		<?php if($zone->kind == 'Master') { ?>
+		<div class="alert alert-warning">
+			<strong>Warning:</strong> Deleting a zone that uses master/slave replication will not delete the zone from the slave server(s).
+		</div>
+		<?php } ?>
 	</div>
 	<?php } ?>
 	<div role="tabpanel" class="tab-pane" id="changelog">
 		<h2 class="sr-only">Changelog</h2>
+		<button class="btn btn-default" id="changelog-expand-all">expand all</button>
+		<button class="btn btn-default" id="changelog-collapse-all">collapse all</button>
 		<?php if(count($changesets) == 0) { ?>
 		<p>No changes have been made to this zone.</p>
 		<?php } ?>
@@ -550,8 +687,8 @@ global $output_formatter;
 				<tr data-zone="<?php out($zone->name)?>" data-changeset="<?php out($changeset->id)?>">
 					<td class="nowrap"><?php out($changeset->change_date->format('Y-m-d H:i:s'))?></td>
 					<td><?php out($output_formatter->changeset_comment_format($changeset->comment), ESC_NONE) ?></td>
-					<td class="nowrap"><?php if($changeset->requester) { ?><a href="/users/<?php out($changeset->requester->uid)?>"><?php out($changeset->requester->name)?><?php } ?></td>
-					<td class="nowrap"><a href="/users/<?php out($changeset->author->uid, ESC_URL)?>"><?php out($changeset->author->name)?></td>
+					<td class="nowrap"><?php if($changeset->requester) { ?><a href="<?php outurl('/users/'.urlencode($changeset->requester->uid))?>"><?php out($changeset->requester->name)?><?php } ?></td>
+					<td class="nowrap"><a href="<?php outurl('/users/'.urlencode($changeset->author->uid))?>"><?php out($changeset->author->name)?></td>
 					<td><?php out('-'.$changeset->deleted.'/+'.$changeset->added)?></td>
 					<td></td>
 				</tr>
@@ -564,7 +701,7 @@ global $output_formatter;
 		<?php if(count($access) == 0) { ?>
 		<p>No users have been assigned to this zone.</p>
 		<?php } else { ?>
-		<form method="post" action="/zones/<?php out(DNSZoneName::unqualify($zone->name), ESC_URL)?>">
+		<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>">
 			<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
 			<table class="table table-condensed table-bordered">
 				<thead>
@@ -591,7 +728,7 @@ global $output_formatter;
 		</form>
 		<?php } ?>
 		<?php if($active_user->admin) { ?>
-		<form method="post" action="/zones/<?php out(DNSZoneName::unqualify($zone->name), ESC_URL)?>" class="form-horizontal">
+		<form method="post" action="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>" class="form-horizontal">
 			<?php out($this->get('active_user')->get_csrf_field(), ESC_NONE) ?>
 			<div class="form-group">
 				<label for="uid" class="col-sm-2 control-label">Username</label>

@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -47,8 +47,22 @@ class ZoneDirectory extends DBDirectory {
 		$stmt->bindParam(4, $zone->kind, PDO::PARAM_STR);
 		$stmt->bindParam(5, $zone->account, PDO::PARAM_STR);
 		$stmt->bindParam(6, $zone->dnssec, PDO::PARAM_INT);
-		$stmt->execute();
-		$zone->id = $this->database->lastInsertId('zone_id_seq');
+		try {
+			$stmt->execute();
+			$zone->id = $this->database->lastInsertId('zone_id_seq');
+		} catch(PDOException $e) {
+			if($e->getCode() == 23505) {
+				// Zone already exists in the database
+				$stmt = $this->database->prepare('SELECT id FROM zone WHERE name = ?');
+				$stmt->bindParam(1, $name, PDO::PARAM_STR);
+				$stmt->execute();
+				if($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+					$zone->id = $row['id'];
+				}
+			} else {
+				throw $e;
+			}
+		}
 	}
 
 	/**
@@ -56,6 +70,7 @@ class ZoneDirectory extends DBDirectory {
 	* @param Zone $zone to be created
 	*/
 	public function create_zone($zone) {
+		global $config;
 		$data = new StdClass;
 		$data->name = $zone->name;
 		$data->kind = $zone->kind;
@@ -85,7 +100,7 @@ class ZoneDirectory extends DBDirectory {
 			}
 			$data->rrsets[] = $recordset;
 		}
-		$data->soa_edit_api = 'INCEPTION-INCREMENT';
+		$data->soa_edit_api = isset($config['powerdns']['soa_edit_api']) ? $config['powerdns']['soa_edit_api'] : 'INCEPTION-INCREMENT';
 		$data->account = $zone->account;
 		$data->dnssec = (bool)$zone->dnssec;
 		$response = $this->powerdns->post('zones', $data);
@@ -99,12 +114,28 @@ class ZoneDirectory extends DBDirectory {
 
 	/**
 	* List all zones in PowerDNS and update list in database to match.
+	* @param array $include list of extra data to include in response
 	* @return array of Zone objects indexed by pdns_id
 	*/
-	public function list_zones() {
+	public function list_zones($include = array()) {
 		$this->database->query('BEGIN WORK');
 		$this->database->query('LOCK TABLE zone');
-		$stmt = $this->database->prepare('SELECT * FROM zone ORDER BY name');
+		$fields = array('zone.*');
+		$joins = array();
+		foreach($include as $field) {
+			switch($field) {
+			case 'pending_updates':
+				$fields[] = 'COUNT(pending_update.id) as pending_updates';
+				$joins[] = 'LEFT JOIN pending_update ON pending_update.zone_id = zone.id';
+				break;
+			}
+		}
+		$stmt = $this->database->prepare('
+			SELECT '.implode(', ', $fields).'
+			FROM zone '.implode(" ", $joins).'
+			GROUP BY zone.id
+			ORDER BY zone.name
+		');
 		$stmt->execute();
 		$zones_by_pdns_id = array();
 		$current_zones = array();
@@ -195,12 +226,13 @@ class ZoneDirectory extends DBDirectory {
 
 	/**
 	* Check the list of zones to see if a suitable reverse zone exists for the forward record.
+	* @param string $name of DNS record
 	* @param string $type of DNS record
 	* @param string $address that DNS record points to
 	* @param array $revs_missing keep track of reverse zones that are missing
 	* @param array $revs_updated keep track of reverse zones that will be updated
 	*/
-	public function check_reverse_record_zone($type, $address, &$revs_missing, &$revs_notify) {
+	public function check_reverse_record_zone($name, $type, $address, &$revs_missing, &$revs_notify) {
 		global $zone_dir, $active_user;
 
 		if($type == 'A') {
@@ -219,13 +251,24 @@ class ZoneDirectory extends DBDirectory {
 				$reverse_zone = $zone_dir->get_zone_by_name($reverse_zone_name);
 				// See if a record already exists for this IP
 				foreach($reverse_zone->list_resource_record_sets() as $rrset) {
-					if($rrset->type == 'PTR' && $rrset->name == $reverse_address) {
-						$alert = new UserAlert;
-						$alert->escaping = ESC_NONE;
-						$alert->content = 'Reverse record already exists for '.hesc($address).' in <a href="/zones/'.urlencode(DNSZoneName::unqualify($reverse_zone->name)).'" class="alert-link">'.hesc(DNSZoneName::unqualify($reverse_zone->name)).'</a>. Not modifying existing record.';
-						$alert->class = 'warning';
-						$active_user->add_alert($alert);
-						return false;
+					if($rrset->name == $reverse_address) {
+						if($rrset->type == 'PTR') {
+							$alert = new UserAlert;
+							$alert->escaping = ESC_NONE;
+							$alert->content = 'Reverse record already exists for '.hesc($address).' in <a href="'.rrurl('/zones/'.urlencode(DNSZoneName::unqualify($reverse_zone->name))).'" class="alert-link">'.hesc(DNSZoneName::unqualify($reverse_zone->name)).'</a>. Not modifying existing PTR record from '.$rrset->merge_content_text().' to '.$name;
+							$alert->class = 'warning';
+							$active_user->add_alert($alert);
+							return false;
+						}
+						if($rrset->type == 'CNAME') {
+							$rr = reset($rrset->list_resource_records());
+							$alert = new UserAlert;
+							$alert->escaping = ESC_NONE;
+							$alert->content = 'Reverse record delegated to '.hesc($rr->content).' for '.hesc($address).' in <a href="'.rrurl('/zones/'.urlencode(DNSZoneName::unqualify($reverse_zone->name))).'" class="alert-link">'.hesc(DNSZoneName::unqualify($reverse_zone->name)).'</a>. Not creating PTR record for '.$name;
+							$alert->class = 'warning';
+							$active_user->add_alert($alert);
+							return false;
+						}
 					}
 				}
 				// Add reverse zone to list of zones to send a notify for
@@ -235,10 +278,10 @@ class ZoneDirectory extends DBDirectory {
 			}
 		} while($this->remove_subdomain($reverse_zone_name));
 		$alert = new UserAlert;
-		$alert->content = "No suitable reverse zone could be found for $address.";
+		$alert->content = "No suitable reverse zone could be found to place record for $address pointing to $name";
 		$alert->class = 'warning';
 		$active_user->add_alert($alert);
-		$revs_missing[$type][] = $address;
+		$revs_missing[$type][] = array('name' => $name, 'address' => $address);
 		return false;
 	}
 
@@ -272,6 +315,24 @@ class ZoneDirectory extends DBDirectory {
 					fclose($fh);
 					exec('LANG=en_US.UTF-8 git add '.escapeshellarg($outfile));
 				}
+				exec('LANG=en_US.UTF-8 git commit --author '.escapeshellarg($active_user->name.' <'.$active_user->email.'>').' -m '.escapeshellarg($message));
+			}
+			chdir($original_dir);
+		}
+	}
+
+	/**
+	* Remove the specified zone from the git-tracked export
+	* @param Zone $zone to be removed
+	* @param string $message commit message
+	*/
+	public function git_tracked_delete(Zone $zone, $message) {
+		global $config, $active_user;
+		if($config['git_tracked_export']['enabled']) {
+			$original_dir = getcwd();
+			if(chdir($config['git_tracked_export']['path'])) {
+				$outfile = urlencode(DNSZoneName::unqualify($zone->name));
+				exec('LANG=en_US.UTF-8 git rm '.escapeshellarg($outfile));
 				exec('LANG=en_US.UTF-8 git commit --author '.escapeshellarg($active_user->name.' <'.$active_user->email.'>').' -m '.escapeshellarg($message));
 			}
 			chdir($original_dir);

@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -20,6 +20,6 @@ $newzonename = $this->get('newzonename');
 ?>
 <h2>Zone split of <?php out(punycode_to_utf8(DNSZoneName::unqualify($newzonename)))?> from <?php out(punycode_to_utf8(DNSZoneName::unqualify($zone->name)))?></h2>
 <ul>
-	<li><a href="/zones/<?php out(urlencode(DNSZoneName::unqualify($zone->name)))?>">View <?php out(punycode_to_utf8(DNSZoneName::unqualify($zone->name)))?> zone</a></li>
-	<li><a href="/zones/<?php out(urlencode(DNSZoneName::unqualify($newzonename)))?>">View <?php out(punycode_to_utf8(DNSZoneName::unqualify($newzonename)))?> zone</a></li>
+	<li><a href="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($zone->name)))?>">View <?php out(punycode_to_utf8(DNSZoneName::unqualify($zone->name)))?> zone</a></li>
+	<li><a href="<?php outurl('/zones/'.urlencode(DNSZoneName::unqualify($newzonename)))?>">View <?php out(punycode_to_utf8(DNSZoneName::unqualify($newzonename)))?> zone</a></li>
 </ul>

@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$newzone = new Zone;
 			$newzone->name = $newzonename;
 			$newzone->account = $zone->account;
+			$newzone->dnssec = $zone->dnssec;
 			$newzone->kind = 'Master';
 			$newzone->nameservers = $zone->nameservers;
 			foreach($split as $rrset) {

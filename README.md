@@ -38,14 +38,16 @@ As another option, you can use PowerDNS 3 with
 Requirements
 ------------
 
-* Apache 2.2.18 or higher
-* PHP 5.6 or higher
+* Apache 2.2.18+ / nginx
+* PHP 5.6+
 * PHP intl (Internationalization Functions) extension
 * PHP JSON extension
+* PHP CURL extension
+* PHP Multibyte String extension
 * PHP LDAP extension
 * PHP PDO_PGSQL extension
 * PostgreSQL database
-* PowerDNS authoritative server (>= 4.0.4)
+* PowerDNS authoritative server 4.0.4+
 
 Installation
 ------------
@@ -59,22 +61,42 @@ Installation
         api=yes
         api-key=...
 
-2.  Clone this repo to somewhere *outside* of your default Apache document root.
+2.  Clone this repo to somewhere *outside* of your default web server document root.
 
 3.  Create a postgresql user and database.
 
         createuser -P dnsui-user
         createdb -O dnsui-user dnsui-db
 
-4.  Add the following directives to your Apache configuration (eg. virtual host config):
+4.  Add the following directives to your web server configuration (eg. virtual host config):
 
-        DocumentRoot /path/to/dnsui/public_html
-        DirectoryIndex init.php
-        FallbackResource /init.php
-        AllowEncodedSlashes NoDecode
+    *   Apache:
 
-5.  Set up authnz_ldap for your virtual host (or any other authentication module that will pass on an Auth-user
-    variable to the application).
+            DocumentRoot /path/to/dnsui/public_html
+            DirectoryIndex init.php
+            FallbackResource /init.php
+            AllowEncodedSlashes NoDecode
+
+        [Full Apache virtualhost example](https://github.com/operasoftware/dns-ui/wiki/Example-configuration:-apache)
+
+    *   nginx:
+
+            root /path/to/dnsui/public_html;
+            index init.php;
+            location / {
+                try_files $uri $uri/ @php;
+            }
+            location @php {
+                rewrite ^/(.*)$ /init.php/$1 last;
+            }
+            location /init.php {
+                fastcgi_pass unix:/run/php/php7.0-fpm.sock ;
+                include /etc/nginx/snippets/fastcgi-php.conf;
+            }
+
+        [Full nginx server example](https://github.com/operasoftware/dns-ui/wiki/Example-configuration:-nginx)
+
+5.  Set up an authentication module for your virtual host (eg. authnz_ldap for Apache).
 
 6.  Copy the file `config/config-sample.ini` to `config/config.ini` and edit the settings as required.
 
@@ -85,6 +107,12 @@ Usage
 
 Anyone in the LDAP group defined under `admin_group_cn` in `config/config.ini` will be able to add and modify all zones.
 They will also be able to grant access under "User access" for any zone to any number of users.
+
+API
+---
+
+By going to the URL `/api/v2` with your web browser you can see documentation of the rest API, including all of the
+available API methods. [See this on the demo server](https://dnsui.xiven.com/api/v2).
 
 Screenshots
 -----------
@@ -98,7 +126,7 @@ Screenshots
 License
 -------
 
-Copyright 2013-2017 Opera Software
+Copyright 2013-2018 Opera Software
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
