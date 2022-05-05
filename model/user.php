@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -101,6 +101,42 @@ class User extends Record {
 	}
 
 	/**
+	* Retrieve this user's details from the configured data source.
+	* @throws UserDataSourceException if no user data source is configured
+	*/
+	public function get_details() {
+		global $config;
+		if(!empty($config['ldap']['enabled'])) {
+			$this->get_details_from_ldap();
+		} elseif(!empty($config['php_auth']['enabled'])) {
+			$this->get_details_from_php_auth();
+		} else {
+			throw new UserDataSourceException('User data source not configured.');
+		}
+	}
+
+	/**
+	* Retrieve this user's details from PHP_AUTH variables.
+	* @throws UserNotFoundException if the user details are not found in PHP_AUTH variables
+	*/
+	public function get_details_from_php_auth() {
+		global $config;
+		if($this->uid == $_SERVER['PHP_AUTH_USER'] and isset($_SERVER['PHP_AUTH_NAME']) and isset($_SERVER['PHP_AUTH_EMAIL']) and isset($_SERVER['PHP_AUTH_GROUPS'])) {
+			$this->auth_realm = 'PHP_AUTH';
+			$this->name = $_SERVER['PHP_AUTH_NAME'];
+			$this->email = $_SERVER['PHP_AUTH_EMAIL'];
+			$this->active = 1;
+			$this->admin = 0;
+			$groups = explode(' ', $_SERVER['PHP_AUTH_GROUPS']);
+			foreach($groups as $group) {
+				if($group == $config['php_auth']['admin_group']) $this->admin = 1;
+			}
+		} else {
+			throw new UserNotFoundException('User does not exist in PHP_AUTH variables.');
+		}
+	}
+
+	/**
 	* Retrieve this user's details from LDAP.
 	* @throws UserNotFoundException if the user is not found in LDAP
 	*/
@@ -138,7 +174,7 @@ class User extends Record {
 				if($ldapgroup['cn'] == $config['ldap']['admin_group_cn']) $this->admin = 1;
 			}
 		} else {
-			throw new UserNotFoundException('User does not exist.');
+			throw new UserNotFoundException('User does not exist in LDAP.');
 		}
 	}
 
@@ -161,11 +197,12 @@ class User extends Record {
 
 	/**
 	* List all zones that this user is an administrator of
+	* @param array $include list of extra data to include in response
 	* @return array of Zone objects
 	*/
-	public function list_admined_zones() {
+	public function list_admined_zones($include = array()) {
 		global $zone_dir;
-		$zones = $zone_dir->list_zones();
+		$zones = $zone_dir->list_zones($include);
 		$admined_zones = array();
 		foreach($zones as $zone) {
 			if($this->access_to($zone)) $admined_zones[$zone->pdns_id] = $zone;
@@ -175,14 +212,15 @@ class User extends Record {
 
 	/**
 	* List all zones that this user has access to in some way
+	* @param array $include list of extra data to include in response
 	* @return array of Zone objects
 	*/
-	public function list_accessible_zones() {
+	public function list_accessible_zones($include = array()) {
 		global $zone_dir;
 		if($this->admin) {
-			$zones = $zone_dir->list_zones();
+			$zones = $zone_dir->list_zones($include);
 		} else {
-			$zones = $this->list_admined_zones();
+			$zones = $this->list_admined_zones($include);
 		}
 		return $zones;
 	}
@@ -212,7 +250,7 @@ class User extends Record {
 			unset($row['serial']);
 			unset($row['account']);
 			unset($row['active']);
-			$row['change_date'] = DateTime::createFromFormat('Y-m-d H:i:s.u', $row['change_date']);
+			$row['change_date'] = parse_postgres_date($row['change_date']);
 			$changesets[] = new ChangeSet($row['id'], $row);
 		}
 		return $changesets;

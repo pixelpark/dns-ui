@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -34,13 +34,13 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
 		try {
 			$user_dir->add_user($user);
 			$alert = new UserAlert;
-			$alert->content = 'User \'<a href="/users/'.urlencode($user->uid).'" class="alert-link">'.hesc($user->uid).'</a>\' added.';
+			$alert->content = 'User \'<a href="'.rrurl('/users/'.urlencode($user->uid)).'" class="alert-link">'.hesc($user->uid).'</a>\' added.';
 			$alert->escaping = ESC_NONE;
 			$alert->class = 'success';
 			$active_user->add_alert($alert);
 		} catch(UserAlreadyExistsException $e) {
 			$alert = new UserAlert;
-			$alert->content = 'A user with user ID of \'<a href="/users/'.urlencode($user->uid).'" class="alert-link">'.hesc($user->uid).'</a>\' already exists.';
+			$alert->content = 'A user with user ID of \'<a href="'.rrurl('/users/'.urlencode($user->uid)).'" class="alert-link">'.hesc($user->uid).'</a>\' already exists.';
 			$alert->escaping = ESC_NONE;
 			$alert->class = 'danger';
 			$active_user->add_alert($alert);

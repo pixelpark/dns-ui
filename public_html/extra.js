@@ -1,6 +1,6 @@
 /*
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 ## limitations under the License.
 ##
 */
+'use strict';
 
 // Remember the last-selected tab in a tab group
 $(function() {
@@ -52,7 +53,7 @@ $(function() {
 	function get_tab_from_location() {
 		var url = document.location.toString();
 		if(url.match('#')) {
-			$('.nav-tabs a[href=#'+url.split('#')[1]+']').tab('show');
+			$('.nav-tabs a[href="#'+url.split('#')[1]+'"]').tab('show');
 		}
 	}
 });
@@ -581,6 +582,15 @@ $(function() {
 		}
 
 		function submit_zone_update(event) {
+			var submitButton = $('#zonesubmit');
+			var updateForm = submitButton[0].form;
+			if(!updateForm.checkValidity()) return;
+			if(submitButton.data('submitted') === true) {
+				event.preventDefault();
+			} else {
+				submitButton.data('submitted', true);
+				submitButton.addClass('disabled');
+			}
 			if($(event.target).val() == 'request') {
 				$(window).off('beforeunload');
 				return;
@@ -589,9 +599,9 @@ $(function() {
 			var actions = [];
 			$('input[name="updates[]"]', $(event.target).closest('form')).each(function() {
 				actions.push(JSON.parse(this.value));
-			})
+			});
 			$.ajax({
-				url: "/api/v2/zones/" + encodeURIComponent(form.data('zone')),
+				url: "../api/v2/zones/" + encodeURIComponent(form.data('zone')),
 				method: "PATCH",
 				data: JSON.stringify({actions: actions, comment: $('#comment').val()}),
 				contentType: "application/json",
@@ -600,7 +610,9 @@ $(function() {
 				$(window).off('beforeunload');
 				window.location.href = window.location.pathname;
 			}).fail(function(response) {
-				data = JSON.parse(response.responseText);
+				submitButton.data('submitted', false);
+				submitButton.removeClass('disabled');
+				var data = JSON.parse(response.responseText);
 				for(var i = 0, error; error = data.errors[i]; i++) {
 					$('#errors').append(
 						$('<div>').addClass('alert').addClass('alert-danger').append(
@@ -884,7 +896,7 @@ $(function() {
 			if(!field[0].checkValidity()) return;
 			var prefix = field.val();
 			var parts = prefix.split(':');
-			for(i = 0; i < parts.length - 1; i++) {
+			for(var i = 0; i < parts.length - 1; i++) {
 				parts[i] = String('0000' + parts[i]).slice(-4);
 			}
 			$('#name').val(parts.join('').split('').reverse().join('.') + '.ip6.arpa');
@@ -892,11 +904,27 @@ $(function() {
 		}
 	});
 
+	$('#changelog-expand-all').on('click', function() {
+		$('table.changelog tbody tr[data-changeset]').each(function() {
+			show_changes($(this), true);
+		});
+		$(this).hide();
+		$('#changelog-collapse-all').show();
+	});
+
+	$('#changelog-collapse-all').on('click', function() {
+		$('table.changelog tbody tr[data-changeset]').each(function() {
+			show_changes($(this), false);
+		});
+		$(this).hide();
+		$('#changelog-expand-all').show();
+	});
+
 	// Add row-expanding functionality on changelog table
 	$('table.changelog').each(function() {
 		$('tbody tr', this).each(function() {
 			$('td:last-child', this).append($('<span>').addClass('glyphicon').addClass('glyphicon-chevron-right'));
-		}).on('click', function() { show_changes($(this), false); });
+		}).on('click', function() { show_changes($(this)); });
 		$('tbody tr a', this).on('click', function(e) {
 			e.stopPropagation();
 		});
@@ -905,138 +933,164 @@ $(function() {
 		window.onpopstate = function(event) {
 			get_changelog_from_location();
 		}
+	});
 
-		// Enable link to changelog entry
-		function get_changelog_from_location() {
-			var url = document.location.toString();
-			if(url.match('#')) {
-				$('tbody tr[data-changeset="' + url.split('#')[2] + '"]').each(function() {
-					show_changes($(this), true);
-					var offset = $(this).offset();
-					offset.top -= 60;
-					$('html, body').animate({
-						scrollTop: offset.top,
-					});
+	// Enable link to changelog entry
+	function get_changelog_from_location() {
+		var url = document.location.toString();
+		if(url.match('#')) {
+			$('tbody tr[data-changeset="' + url.split('#')[2] + '"]').each(function() {
+				show_changes($(this));
+				var offset = $(this).offset();
+				offset.top -= 60;
+				$('html, body').animate({
+					scrollTop: offset.top,
 				});
-			}
+			});
+		}
+	}
+
+	function show_changes(tr, display) {
+		// display: undefined toggles, true always shows, false always hides.
+		var zone = tr.data('zone');
+		var changeset = tr.data('changeset');
+
+		var hash = '#changelog#' + changeset;
+		if(history) {
+			history.replaceState(null, null, hash);
+		} else {
+			window.location.hash = hash;
 		}
 
-		function show_changes(tr) {
-			var zone = tr.data('zone');
-			var changeset = tr.data('changeset');
-
-			var hash = '#changelog#' + changeset;
-			if(history) {
-				history.replaceState(null, null, hash);
-			} else {
-				window.location.hash = hash;
-			}
-
+		if (display === undefined) {
 			$('td:last-child span', tr).toggleClass('glyphicon-chevron-right').toggleClass('glyphicon-chevron-down');
-			if(tr.data('details_loaded')) {
-				tr.next().toggle();
-			} else {
-				var newtr = $('<tr>');
-				var newtd = $('<td>');
-				newtd.prop('colspan', 6);
-				newtr.append(newtd);
-				newtr.addClass('changeset');
-				tr.after(newtr);
+		} else if (display === true) {
+			$('td:last-child span', tr).removeClass('glyphicon-chevron-right').addClass('glyphicon-chevron-down');
+		} else {
+			$('td:last-child span', tr).removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-right');
+		}
+		if(tr.data('details_loaded')) {
+			tr.next().toggle(display);
+		} else if (display !== false) {
+			var newtr = $('<tr>');
+			var newtd = $('<td>');
+			newtd.prop('colspan', 6);
+			newtr.append(newtd);
+			newtr.addClass('changeset');
+			tr.after(newtr);
 
-				tr.data('details_loaded', true);
+			tr.data('details_loaded', true);
 
-				$.getJSON('/api/v2/zones/' + encodeURIComponent(zone) + '/changes/' + encodeURIComponent(changeset), function(data) {
-					var change;
-					for(i = 0; change = data.changes[i]; i++) {
-						var panelheader = $('<div>').addClass('panel-heading');
-						if(!change.before) {
-							var panelclass = 'success';
-							panelheader.append('Added ').append($('<tt>').append(change.after.name + ' ' + change.after.type)).append(', TTL: ' + change.after.ttl);
-						} else if(!change.after) {
-							var panelclass = 'danger';
-							panelheader.append('Deleted ').append($('<tt>').append(change.before.name + ' ' + change.before.type)).append(', TTL: ' + change.before.ttl);
-						} else {
-							var panelclass = 'default';
-							var tt = $('<tt>');
-							show_diff(tt, change.before.name + ' ' + change.before.type, change.after.name + ' ' + change.after.type);
-							panelheader.append('Updated ').append(tt).append(', TTL: ');
-							show_diff(panelheader, change.before.ttl, change.after.ttl)
-							var heading = 'Updated ';
-						}
-						var panel = $('<div>').addClass('panel').addClass('panel-' + panelclass);
-						var panelbody = $('<div>').addClass('panel-body');
-						var table = $('<table>').addClass('table').addClass('table-condensed');
-						table.append($('<thead>').append($('<tr>')
-							.append($('<th>').append('Content'))
-							.append($('<th>').append('Enabled'))
-						));
-						var tbody = $('<tbody>');
-						if(change.before) {
-							for(j = 0; rr = change.before.rrs[j]; j++) {
-								var tr = $('<tr>');
-								var rr_match = false;
-								var after_rr;
-								if(change.after) {
-									for(k = 0; after_rr = change.after.rrs[k]; k++) {
-										if(after_rr.content == rr.content) {
-											rr_match = true;
-											change.after.rrs.splice(k, 1); // Remove from array
-											break;
-										}
+			$.getJSON('../api/v2/zones/' + encodeURIComponent(zone) + '/changes/' + encodeURIComponent(changeset), function(data) {
+				var change;
+				for(var i = 0, change; change = data.changes[i]; i++) {
+					var panelheader = $('<div>').addClass('panel-heading');
+					if(!change.before) {
+						var panelclass = 'success';
+						panelheader.append('Added ').append($('<tt>').append(change.after.name + ' ' + change.after.type)).append(', TTL: ' + change.after.ttl);
+					} else if(!change.after) {
+						var panelclass = 'danger';
+						panelheader.append('Deleted ').append($('<tt>').append(change.before.name + ' ' + change.before.type)).append(', TTL: ' + change.before.ttl);
+					} else {
+						var panelclass = 'default';
+						var tt = $('<tt>');
+						show_diff(tt, change.before.name + ' ' + change.before.type, change.after.name + ' ' + change.after.type);
+						panelheader.append('Updated ').append(tt).append(', TTL: ');
+						show_diff(panelheader, change.before.ttl, change.after.ttl)
+						var heading = 'Updated ';
+					}
+					var panel = $('<div>').addClass('panel').addClass('panel-' + panelclass);
+					var panelbody = $('<div>').addClass('panel-body');
+					var table = $('<table>').addClass('table').addClass('table-condensed');
+					table.append($('<thead>').append($('<tr>')
+						.append($('<th>').append('Content'))
+						.append($('<th>').append('Enabled'))
+					));
+					var tbody = $('<tbody>');
+					if(change.before) {
+						for(var j = 0, rr; rr = change.before.rrs[j]; j++) {
+							var tr = $('<tr>');
+							var rr_match = false;
+							var after_rr;
+							if(change.after) {
+								for(var k = 0, after_rr; after_rr = change.after.rrs[k]; k++) {
+									if(after_rr.content == rr.content) {
+										rr_match = true;
+										change.after.rrs.splice(k, 1); // Remove from array
+										break;
 									}
 								}
-								if(rr_match) {
-									var td = $('<td>').addClass('content');
-									show_diff(td, rr.content, after_rr.content);
-									tr.append(td);
-									var td = $('<td>');
-									show_diff(td, rr.enabled ? 'Yes' : 'No', after_rr.enabled ? 'Yes' : 'No');
-									tr.append(td);
-								} else {
-									tr.append($('<td>').addClass('content').append($('<del>').append(rr.content)));
-									tr.append($('<td>').append($('<del>').append(rr.enabled ? 'Yes' : 'No')));
-								}
-								tbody.append(tr);
 							}
-						}
-						if(change.after) {
-							for(j = 0; rr = change.after.rrs[j]; j++) {
-								var tr = $('<tr>');
-								tr.append($('<td>').addClass('content').append($('<ins>').append(rr.content)));
-								tr.append($('<td>').append($('<ins>').append(rr.enabled ? 'Yes' : 'No')));
-								tbody.append(tr);
+							if(rr_match) {
+								var td = $('<td>').addClass('content');
+								show_diff(td, rr.content, after_rr.content);
+								tr.append(td);
+								var td = $('<td>');
+								show_diff(td, rr.enabled ? 'Yes' : 'No', after_rr.enabled ? 'Yes' : 'No');
+								tr.append(td);
+							} else {
+								tr.append($('<td>').addClass('content').append($('<del>').append(rr.content)));
+								tr.append($('<td>').append($('<del>').append(rr.enabled ? 'Yes' : 'No')));
 							}
+							tbody.append(tr);
 						}
-						table.append(tbody);
-						panelbody.append(table);
-						var before_comment = null;
-						var after_comment = null;
-						if(change.before && change.before.comment) before_comment = change.before.comment;
-						if(change.after && change.after.comment) after_comment = change.after.comment;
-						if(before_comment || after_comment) {
-							var comment = $('<p>').append('RRSet comment: ');
-							show_diff(comment, before_comment, after_comment);
-							panelbody.append(comment);
-						}
-						panel.append(panelheader);
-						panel.append(panelbody);
-						newtd.append(panel);
 					}
-				});
-			}
+					if(change.after) {
+						for(var j = 0, rr; rr = change.after.rrs[j]; j++) {
+							var tr = $('<tr>');
+							tr.append($('<td>').addClass('content').append($('<ins>').append(rr.content)));
+							tr.append($('<td>').append($('<ins>').append(rr.enabled ? 'Yes' : 'No')));
+							tbody.append(tr);
+						}
+					}
+					table.append(tbody);
+					panelbody.append(table);
+					var before_comment = null;
+					var after_comment = null;
+					if(change.before && change.before.comment) before_comment = change.before.comment;
+					if(change.after && change.after.comment) after_comment = change.after.comment;
+					if(before_comment || after_comment) {
+						var comment = $('<p>').append('RRSet comment: ');
+						show_diff(comment, before_comment, after_comment);
+						panelbody.append(comment);
+					}
+					panel.append(panelheader);
+					panel.append(panelbody);
+					newtd.append(panel);
+				}
+			});
 		}
+	}
 
-		function show_diff(element, before, after) {
-			if(!before) {
-				element.append($('<ins>').append(after));
-			} else if(!after) {
-				element.append($('<del>').append(before));
-			} else if(before == after) {
-				element.append(after);
-			} else {
-				element.append($('<del>').append(before)).append(' ').append($('<ins>').append(after));
-			}
+	function show_diff(element, before, after) {
+		if(!before) {
+			element.append($('<ins>').append(after));
+		} else if(!after) {
+			element.append($('<del>').append(before));
+		} else if(before == after) {
+			element.append(after);
+		} else {
+			element.append($('<del>').append(before)).append(' ').append($('<ins>').append(after));
 		}
+	}
+
+	// Add delete/restore zone confirmation checkbox
+	$('form.zonedelete, form.zonerestore, form.disablednssec').each(function() {
+		var form = $(this);
+		$('label', form).hide();
+		$('.alert', form).hide();
+		$('button.btn-danger', form).on('click', function(e) {
+			if($('input:checkbox:checked', form).length == 0) {
+				$('label', form).show('fast');
+				$('.alert', form).show('fast');
+				$('button span', form).hide('fast');
+				$(this).prop('disabled', true);
+				e.preventDefault();
+			}
+		});
+		$('input:checkbox', form).on('click', function(e) {
+			$('button.btn-danger', form).prop('disabled', !this.checked);
+		});
 	});
 
 	// Add filter functionality for zone list tables
@@ -1083,14 +1137,14 @@ $(function() {
 			var filters = [];
 			$('thead th input', table).each(function() {
 				if(this.value != '') {
-					filters[$(this).parent().prop('cellIndex')] = this.value;
+					filters[$(this).parent().prop('cellIndex')] = this.value.toLowerCase();
 				}
 			});
 			$('tbody tr', table).each(function() {
 				var filtered = false;
 				$('td', this).each(function() {
 					var cellIndex = $(this).prop('cellIndex');
-					if(filters[cellIndex] && $(this).text().indexOf(filters[cellIndex]) == -1) {
+					if(filters[cellIndex] && $(this).text().toLowerCase().indexOf(filters[cellIndex]) == -1) {
 						filtered = true;
 					}
 				});

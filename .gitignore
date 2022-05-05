@@ -1,5 +1,11 @@
 config/config.ini
-extensions/*.php
 *.swp
 *.old
 *.bak
+public_html/site.css
+extensions/*.php
+vagrant/*.retry
+vagrant/*.log
+vagrant/.vagrant
+vagrant/ansible/config.yml
+vagrant/ansible/*.retry

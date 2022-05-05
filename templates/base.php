@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -21,10 +21,13 @@ header("Content-Security-Policy: default-src 'self'");
 <!DOCTYPE html>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="stylesheet" href="/bootstrap/css/bootstrap.min.css"/>
-<link rel="stylesheet" href="/bootstrap/css/bootstrap-theme.min.css"/>
-<link rel="stylesheet" href="/style.css?<?php out(filemtime('public_html/style.css'))?>">
-<link rel="icon" href="/book_next.png">
+<link rel="stylesheet" href="<?php outurl('/bootstrap/css/bootstrap.min.css')?>">
+<link rel="stylesheet" href="<?php outurl('/bootstrap/css/bootstrap-theme.min.css')?>">
+<link rel="stylesheet" href="<?php outurl('/style.css?'.filemtime('public_html/style.css'))?>">
+<?php if(is_file("public_html/site.css")) { ?>
+<link rel="stylesheet" href="<?php outurl('/site.css?'.filemtime('public_html/site.css'))?>">
+<?php } ?>
+<link rel="icon" href="<?php outurl('/book_next.png')?>">
 <title><?php out($this->get('title'))?></title>
 <?php out($this->get('head'), ESC_NONE) ?>
 <div id="wrap">
@@ -38,9 +41,13 @@ header("Content-Security-Policy: default-src 'self'");
 				<span class="icon-bar"></span>
 			</button>
 			<?php if(!empty($web_config['logo'])) { ?>
-			<a class="navbar-brand" href="/">
+			<a class="navbar-brand" href="<?php outurl('/')?>">
 				<img src="<?php out($web_config['logo'])?>">
+				<?php if(!empty($web_config['header'])) { ?>
+				<?php out($web_config['header'], ESC_NONE)?>
+				<?php } else { ?>
 				DNS management
+				<?php } ?>
 			</a>
 			<?php } ?>
 		</div>
@@ -52,12 +59,12 @@ header("Content-Security-Policy: default-src 'self'");
 					<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"><?php out($name)?> <span class="caret"></span></a>
 					<ul class="dropdown-menu">
 						<?php foreach($contents as $subname => $url) { ?>
-						<li<?php if($url == $this->get('relative_request_url')) out(' class="active"', ESC_NONE); ?>><a href="<?php out($url)?>"><?php out($subname)?></a></li>
+						<li<?php if($url == $this->get('relative_request_url')) out(' class="active"', ESC_NONE); ?>><a href="<?php outurl($url)?>"><?php out($subname)?></a></li>
 						<?php } ?>
 					</ul>
 				</li>
 				<?php } else { ?>
-				<li<?php if($contents == $this->get('relative_request_url')) out(' class="active"', ESC_NONE); ?>><a href="<?php out($contents)?>"><?php out($name)?></a></li>
+				<li<?php if($contents == $this->get('relative_request_url')) out(' class="active"', ESC_NONE); ?>><a href="<?php outurl($contents)?>"><?php out($name)?></a></li>
 				<?php } ?>
 				<?php } ?>
 			</ul>
@@ -81,7 +88,7 @@ header("Content-Security-Policy: default-src 'self'");
 		<?php } ?>
 	</div>
 </div>
-<script src="/jquery/jquery-1.11.3.min.js"></script>
-<script src="/bootstrap/js/bootstrap.min.js"></script>
-<script src="/ipaddr/ipaddr.min.js"></script>
-<script src="/extra.js?<?php out(filemtime('public_html/extra.js'))?>"></script>
+<script src="<?php outurl('/jquery/jquery-1.11.3.min.js')?>"></script>
+<script src="<?php outurl('/bootstrap/js/bootstrap.min.js')?>"></script>
+<script src="<?php outurl('/ipaddr/ipaddr.min.js')?>"></script>
+<script src="<?php outurl('/extra.js?'.filemtime('public_html/extra.js'))?>"></script>

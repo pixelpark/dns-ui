@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -110,6 +110,17 @@ class ResourceRecordSet {
 			$text = trim($text.' '.$comment->content);
 		}
 		return $text;
+	}
+
+	/**
+	* Return a single string containing all contents of records in the RRset
+	*/
+	public function merge_content_text() {
+		$array = array();
+		foreach($this->list_resource_records() as $record) {
+			$array[] = $record->content;
+		}
+		return english_list($array);
 	}
 
 	/**

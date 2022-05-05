@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -48,5 +48,10 @@ class PowerDNS extends PestJSON {
     public function patch($url, $data, $headers = array()) {
     	$headers['X-API-Key'] = $this->api_key;
         return parent::patch($url, $data, $headers);
+    }
+
+    public function delete($url, $headers = array()) {
+    	$headers['X-API-Key'] = $this->api_key;
+        return parent::delete($url, $headers);
     }
 }

@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -156,7 +156,7 @@ class API {
 		global $zone_dir, $active_user;
 		$zone = $zone_dir->get_zone_by_name($zone_name);
 		if(!$active_user->admin && !$active_user->access_to($zone)) throw new AccessDenied;
-		$changesets = $zone->list_changesets();
+		list($changeset_pagecount, $changesets) = $zone->list_changesets();
 		$list = array();
 		foreach($changesets as $changeset) {
 			$item = new StdClass;

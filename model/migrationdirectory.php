@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ class MigrationDirectory extends DBDirectory {
 	/**
 	* Increment this constant to activate a new migration from the migrations directory
 	*/
-	const LAST_MIGRATION = 4;
+	const LAST_MIGRATION = 6;
 
 	public function __construct() {
 		parent::__construct();

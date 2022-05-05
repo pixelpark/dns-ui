@@ -1,6 +1,6 @@
 <?php
 ##
-## Copyright 2013-2017 Opera Software AS
+## Copyright 2013-2018 Opera Software AS
 ##
 ## Licensed under the Apache License, Version 2.0 (the "License");
 ## you may not use this file except in compliance with the License.
@@ -82,10 +82,18 @@ class UserDirectory extends DBDirectory {
 	* @throws UserNotFoundException if no user with that uid exists
 	*/
 	public function get_user_by_uid($uid) {
+		global $config;
+		if(isset($config['authentication']['user_case_sensitive']) && $config['authentication']['user_case_sensitive'] == 0) {
+			$uid = mb_strtolower($uid);
+			$sql_statement = 'SELECT * FROM "user" WHERE lower(uid) = ?';
+		} else {
+			$sql_statement = 'SELECT * FROM "user" WHERE uid = ?';
+		}
+
 		if(isset($this->cache_uid[$uid])) {
 			return $this->cache_uid[$uid];
 		}
-		$stmt = $this->database->prepare('SELECT * FROM "user" WHERE uid = ?');
+		$stmt = $this->database->prepare($sql_statement);
 		$stmt->bindParam(1, $uid, PDO::PARAM_STR);
 		$stmt->execute();
 		if($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
@@ -95,7 +103,7 @@ class UserDirectory extends DBDirectory {
 			$user = new User;
 			$user->uid = $uid;
 			$this->cache_uid[$uid] = $user;
-			$user->get_details_from_ldap();
+			$user->get_details();
 			$this->add_user($user);
 		}
 		return $user;
@@ -138,4 +146,5 @@ class UserDirectory extends DBDirectory {
 }
 
 class UserNotFoundException extends Exception {}
+class UserDataSourceException extends Exception {}
 class UserAlreadyExistsException extends Exception {}
