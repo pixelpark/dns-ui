@@ -675,7 +675,7 @@ class Zone extends Record {
 			$data->rrsets[] = $recordset;
 		}
 		$data->soa_edit_api = isset($config['powerdns']['soa_edit_api']) ? $config['powerdns']['soa_edit_api'] : 'INCEPTION-INCREMENT';
-		if isset($config['powerdns']['master_tsig_key']) {
+		if ( isset($config['powerdns']['master_tsig_key']) ) {
 			$data->master_tsig_key_ids = [isset($config['powerdns']['master_tsig_key']]
 		}
 		$data->account = $this->account;
