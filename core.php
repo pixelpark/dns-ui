@@ -117,7 +117,7 @@ define('ESC_NONE', 9);
 function out($string, $escaping = ESC_HTML) {
 	switch($escaping) {
 	case ESC_HTML:
-		echo htmlspecialchars($string);
+		echo hesc($string);
 		break;
 	case ESC_URL:
 		echo urlencode($string);
@@ -157,6 +157,7 @@ function outurl($url) {
  * @return string HTML-escaped string
  */
 function hesc($string) {
+	if ( is_null($string) ) return '';
 	return htmlspecialchars($string);
 }
 

@@ -156,7 +156,7 @@ class API {
 		global $zone_dir, $active_user;
 		$zone = $zone_dir->get_zone_by_name($zone_name);
 		if(!$active_user->admin && !$active_user->access_to($zone)) throw new AccessDenied;
-		$changesets = $zone->list_changesets();
+		list($changeset_pagecount, $changesets) = $zone->list_changesets();
 		$list = array();
 		foreach($changesets as $changeset) {
 			$item = new StdClass;
@@ -191,8 +191,12 @@ class API {
 		foreach($changeset->list_changes() as $change) {
 			$c_data = new StdClass;
 			$states = array();
-			$states['before'] = unserialize($change->before);
-			$states['after'] = unserialize($change->after);
+			if(!is_null($change->before)) {
+				$states['before'] = unserialize($change->before);
+			}
+			if(!is_null($change->after)) {
+				$states['after'] = unserialize($change->after);
+			}
 			foreach($states as $state => $rrset) {
 				if($rrset) {
 					$c_data->{$state} = new StdClass;
