@@ -184,6 +184,7 @@ global $output_formatter;
 								<option value="NS" data-content-pattern="\S*">NS</option>
 								<?php } ?>
 								<option value="LOC" data-content-pattern="[0-9]{1,2} ([0-9]{1,3} ([0-9]{1,2}(\.[0-9]{1,3})?)?)? [NS] [0-9]{1,2} ([0-9]{1,3} ([0-9]{1,2}(\.[0-9]{1,3})?)?)? [EW] -?[0-9]+(\.[0-9]{1,2})?m?( [0-9]+(\.[0-9]{1,2})?m?( [0-9]+(\.[0-9]{1,2})?m?( [0-9]+(\.[0-9]{1,2})?m?)))">LOC</option>
+								<option value="LUA" data-content-pattern=".*">LUA</option>
 								<option value="MX" data-content-pattern="[0-9]+\s+\S+">MX</option>
 								<option value="PTR" data-content-pattern="\S+">PTR</option>
 								<option value="SPF" data-content-pattern=".*">SPF</option>
@@ -332,7 +333,7 @@ global $output_formatter;
 									}
 								}
 								?>
-								<?php foreach($action->records as $record) { ?>
+								<?php foreach($action->records ?? [] as $record) { ?>
 								<?php if(isset($record->delete)) { ?>
 								<tr>
 									<td><del><?php out($record->content)?></del></td>
@@ -347,7 +348,7 @@ global $output_formatter;
 								<?php } ?>
 							</tbody>
 						</table>
-						<p>RRSet comment: <?php show_diff($current_comment, $action->comment)?></p>
+						<p>RRSet comment: <?php show_diff($current_comment, $action->comment ?? null )?></p>
 						<?php
 					}
 					?>

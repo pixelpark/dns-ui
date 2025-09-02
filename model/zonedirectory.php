@@ -32,7 +32,6 @@ class ZoneDirectory extends DBDirectory {
 		parent::__construct();
 		global $powerdns;
 		$this->powerdns = $powerdns;
-		$this->cache_uid = array();
 	}
 
 	/**
@@ -54,7 +53,7 @@ class ZoneDirectory extends DBDirectory {
 			if($e->getCode() == 23505) {
 				// Zone already exists in the database
 				$stmt = $this->database->prepare('SELECT id FROM zone WHERE name = ?');
-				$stmt->bindParam(1, $name, PDO::PARAM_STR);
+				$stmt->bindParam(1, $zone->name, PDO::PARAM_STR);
 				$stmt->execute();
 				if($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 					$zone->id = $row['id'];
